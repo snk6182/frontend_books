@@ -10,45 +10,79 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout code
+
+      # 1. Checkout source code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Setup Node.js
+      # 2. Setup Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
 
-      # Install dependencies
+      # 3. Install dependencies
       - name: Install dependencies
         run: npm install
 
-      # Build frontend
+      # 4. Build Angular application
       - name: Build frontend
         run: npm run build
 
-      # Deploy frontend
+      # 5. Check build output
+      - name: Check build output
+        run: |
+          echo "Build output:"
+          find dist -maxdepth 3 -type f | head -50
+
+      # 6. Create deployment directory on server
+      - name: Create frontend directory
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: 22
+          script: |
+            sudo mkdir -p /var/www/frontend_test
+            sudo chown -R $USER:$USER /var/www/frontend_test
+            sudo chmod 755 /var/www/frontend_test
+
+      # 7. Deploy frontend files
       - name: Deploy frontend
         uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.SERVER_HOST }}
-          username: ec2-user
+          username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: 22
           source: "dist/*"
-          target: "/var/www/frontend_books"
+          target: "/var/www/frontend_test"
           strip_components: 1
-          debug: true
+          overwrite: true
 
-      # Reload Nginx
+      # 8. Verify deployed files
+      - name: Verify deployment
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: 22
+          script: |
+            echo "Files deployed to /var/www/frontend_test:"
+            ls -la /var/www/frontend_test
+
+      # 9. Test and reload Nginx
       - name: Reload Nginx
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.SERVER_HOST }}
-          username: ec2-user
+          username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: 22
           script: |
             sudo nginx -t
             sudo systemctl reload nginx
+            echo "Nginx reloaded successfully"
