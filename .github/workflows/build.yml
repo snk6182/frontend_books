@@ -1,24 +1,64 @@
-# Build stage
-FROM node:22-alpine AS build
+name: Build and Deploy
 
-WORKDIR /app
+on:
+  push:
+    branches:
+      - main
 
-COPY package*.json ./
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
 
-RUN npm install
+    steps:
 
-COPY . .
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-RUN npm run build
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
 
+      - name: Install dependencies
+        run: npm install
 
-# Production stage
-FROM nginx:alpine
+      - name: Build frontend
+        run: npm run build
 
-RUN rm -rf /usr/share/nginx/html/*
+      # Login to Docker Hub
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-COPY --from=build /app/dist /usr/share/nginx/html
+      # Build Docker image
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/frontend-books:v1 .
 
-EXPOSE 80
+      # Push Docker image
+      - name: Push Docker image
+        run: |
+          docker push ${{ secrets.DOCKER_USERNAME }}/frontend-books:v1
 
-CMD ["nginx", "-g", "daemon off;"]
+      # Deploy Docker container on EC2
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: 22
+          script: |
+            docker pull ${{ secrets.DOCKER_USERNAME }}/frontend-books:v1
+
+            docker stop frontend-books 2>/dev/null || true
+            docker rm frontend-books 2>/dev/null || true
+
+            docker run -d \
+              --name frontend-books \
+              -p 8080:80 \
+              ${{ secrets.DOCKER_USERNAME }}/frontend-books:v1
+
+            docker ps
