@@ -20,7 +20,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
 
       # 3. Install dependencies
       - name: Install dependencies
@@ -36,7 +35,7 @@ jobs:
           echo "Build output:"
           find dist -maxdepth 3 -type f | head -50
 
-      # 6. Create deployment directory on server
+      # 6. Create deployment directory
       - name: Create frontend directory
         uses: appleboy/ssh-action@v1.2.2
         with:
@@ -49,7 +48,7 @@ jobs:
             sudo chown -R $USER:$USER /var/www/frontend_test
             sudo chmod 755 /var/www/frontend_test
 
-      # 7. Deploy frontend files
+      # 7. Deploy frontend
       - name: Deploy frontend
         uses: appleboy/scp-action@v1.0.0
         with:
@@ -62,7 +61,7 @@ jobs:
           strip_components: 1
           overwrite: true
 
-      # 8. Verify deployed files
+      # 8. Verify deployment
       - name: Verify deployment
         uses: appleboy/ssh-action@v1.2.2
         with:
@@ -71,7 +70,7 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: 22
           script: |
-            echo "Files deployed to /var/www/frontend_test:"
+            echo "Deployed files:"
             ls -la /var/www/frontend_test
 
       # 9. Test and reload Nginx
